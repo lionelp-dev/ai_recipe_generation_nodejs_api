@@ -1,0 +1,178 @@
+import app from '@adonisjs/core/services/app'
+import env from '#start/env'
+import { defineConfig } from '@adonisjs/lucid'
+import { mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
+
+const discoveryDatabasePath = app.inProduction
+  ? app.makePath('../tmp/recipe_discovery.sqlite')
+  : app.makePath('tmp/recipe_discovery.sqlite')
+
+mkdirSync(dirname(discoveryDatabasePath), { recursive: true })
+
+const recipeSourceDatabase =
+  env.get('NODE_ENV') === 'development'
+    ? {
+        client: 'better-sqlite3' as const,
+        connection: { filename: app.makePath('../../database/database.sqlite') },
+        useNullAsDefault: true,
+      }
+    : {
+        client: 'pg' as const,
+        connection: {
+          host: requiredDatabaseEnv('DB_HOST'),
+          port: env.get('DB_PORT') ?? 5432,
+          user: requiredDatabaseEnv('DB_USERNAME'),
+          password: requiredDatabasePassword(),
+          database: requiredDatabaseEnv('DB_DATABASE'),
+          ssl: env.get('DB_SSL')
+            ? {
+                rejectUnauthorized: env.get('DB_SSL_REJECT_UNAUTHORIZED') ?? true,
+              }
+            : undefined,
+        },
+        pool: { min: 0, max: 5 },
+      }
+
+function requiredDatabaseEnv(key: 'DB_HOST' | 'DB_USERNAME' | 'DB_DATABASE') {
+  const value = env.get(key)
+  if (!value) throw new Error(`La variable d'environnement ${key} est requise.`)
+  return value
+}
+
+function requiredDatabasePassword() {
+  const value = env.get('DB_PASSWORD')
+  if (!value) throw new Error("La variable d'environnement DB_PASSWORD est requise.")
+  return value.release()
+}
+
+const dbConfig = defineConfig({
+  /**
+   * Default connection used for all queries.
+   */
+  connection: 'sqlite',
+
+  connections: {
+    /**
+     * SQLite connection (default).
+     */
+    sqlite: {
+      client: 'better-sqlite3',
+
+      connection: {
+        filename: discoveryDatabasePath,
+      },
+
+      /**
+       * Required by Knex for SQLite defaults.
+       */
+      useNullAsDefault: true,
+
+      migrations: {
+        /**
+         * Sort migration files naturally by filename.
+         */
+        naturalSort: true,
+
+        /**
+         * Paths containing migration files.
+         */
+        paths: ['database/migrations'],
+      },
+
+      schemaGeneration: {
+        /**
+         * Enable schema generation from Lucid models.
+         */
+        enabled: true,
+
+        /**
+         * Custom schema rules file paths.
+         */
+        rulesPaths: ['./database/schema_rules.js'],
+      },
+    },
+
+    recipe_source: recipeSourceDatabase,
+
+    /**
+     * PostgreSQL connection.
+     * Install package to switch: npm install pg
+     */
+    // pg: {
+    //   client: 'pg',
+    //   connection: {
+    //     host: env.get('DB_HOST'),
+    //     port: env.get('DB_PORT'),
+    //     user: env.get('DB_USER'),
+    //     password: env.get('DB_PASSWORD'),
+    //     database: env.get('DB_DATABASE'),
+    //   },
+    //   migrations: {
+    //     naturalSort: true,
+    //     paths: ['database/migrations'],
+    //   },
+    //   debug: app.inDev,
+    // },
+
+    /**
+     * MySQL / MariaDB connection.
+     * Install package to switch: npm install mysql2
+     */
+    // mysql: {
+    //   client: 'mysql2',
+    //   connection: {
+    //     host: env.get('DB_HOST'),
+    //     port: env.get('DB_PORT'),
+    //     user: env.get('DB_USER'),
+    //     password: env.get('DB_PASSWORD'),
+    //     database: env.get('DB_DATABASE'),
+    //   },
+    //   migrations: {
+    //     naturalSort: true,
+    //     paths: ['database/migrations'],
+    //   },
+    //   debug: app.inDev,
+    // },
+
+    /**
+     * Microsoft SQL Server connection.
+     * Install package to switch: npm install tedious
+     */
+    // mssql: {
+    //   client: 'mssql',
+    //   connection: {
+    //     server: env.get('DB_HOST'),
+    //     port: env.get('DB_PORT'),
+    //     user: env.get('DB_USER'),
+    //     password: env.get('DB_PASSWORD'),
+    //     database: env.get('DB_DATABASE'),
+    //   },
+    //   migrations: {
+    //     naturalSort: true,
+    //     paths: ['database/migrations'],
+    //   },
+    //   debug: app.inDev,
+    // },
+
+    /**
+     * libSQL (Turso) connection.
+     * Install package to switch: npm install @libsql/client
+     */
+    // libsql: {
+    //   client: 'libsql',
+    //   connection: {
+    //     url: env.get('LIBSQL_URL'),
+    //     authToken: env.get('LIBSQL_AUTH_TOKEN'),
+    //   },
+    //   useNullAsDefault: true,
+    //   migrations: {
+    //     naturalSort: true,
+    //     paths: ['database/migrations'],
+    //   },
+    //   debug: app.inDev,
+    // },
+  },
+})
+
+export default dbConfig
